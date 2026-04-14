@@ -133,7 +133,6 @@ hr { border: none; border-top: 1px solid var(--border-light); margin: 12px 0; }
     <button class="nav-btn active" onclick="nav('collect')">Collect</button>
     <button class="nav-btn" onclick="nav('analyze')">Analyze pair</button>
     <button class="nav-btn" onclick="nav('search')">Search</button>
-    <button class="nav-btn" onclick="nav('graph')">Network graph</button>
     <button class="nav-btn" onclick="nav('train')">Train model</button>
   </div>
   <div class="sidebar-section">
@@ -231,24 +230,6 @@ hr { border: none; border-top: 1px solid var(--border-light); margin: 12px 0; }
   </div>
 
   <!-- GRAPH -->
-  <div class="panel" id="panel-graph">
-    <div class="card">
-      <div class="card-head">
-        <span class="card-title">Network graph</span>
-        <span style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)">
-          Min edge: <input type="text" id="g-thresh" value="0.60" style="width:38px;font-size:11px">
-          <button onclick="loadGraph()">Redraw</button>
-        </span>
-      </div>
-      <canvas id="g-canvas" height="420"></canvas>
-      <div style="padding:6px 12px;font-size:11px;color:var(--faint);border-top:1px solid var(--border-light)">
-        Node size ∝ post count &nbsp;|&nbsp; Edge opacity ∝ similarity &nbsp;|&nbsp; Click node to search
-      </div>
-    </div>
-    <div id="g-legend" style="font-size:11px;color:var(--muted);padding:0 0 12px;display:flex;gap:14px;flex-wrap:wrap"></div>
-  </div>
-
-  <!-- TRAIN -->
   <div class="panel" id="panel-train">
     <div class="card">
       <div class="card-head"><span class="card-title">Model training</span></div>
@@ -597,100 +578,6 @@ function analyzeFromSearch(a,b) {
   doAnalyze();
 }
 
-// ─── Graph ────────────────────────────────────────────────────────────────────
-async function loadGraph() {
-  const minScore = parseFloat(document.getElementById('g-thresh').value)||0.60;
-  try {
-    const r = await api('GET', `/graph?min_score=${minScore}`);
-    drawGraph(r.nodes, r.edges);
-    const platsSeen = [...new Set(r.nodes.map(n=>n.platform))];
-    document.getElementById('g-legend').innerHTML =
-      platsSeen.map(p=>`<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:${PLAT_COLORS[p]||'#888'};display:inline-block"></span>${PLAT_LABELS[p]||p}</span>`).join('') +
-      `<span style="margin-left:auto;color:var(--faint)">${r.edges.length} edge${r.edges.length!==1?'s':''} ≥ ${minScore}</span>`;
-  } catch(e) {
-    const canvas=document.getElementById('g-canvas');
-    const ctx=canvas.getContext('2d');
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.fillStyle='#999'; ctx.font='13px Georgia'; ctx.textAlign='center';
-    ctx.fillText(serverOk?'No accounts collected yet.':'Server offline.', canvas.offsetWidth/2, 200);
-  }
-}
-
-function drawGraph(nodes, edges) {
-  const canvas = document.getElementById('g-canvas');
-  const ctx = canvas.getContext('2d');
-  const W = canvas.offsetWidth||600, H=420;
-  canvas.width = W*devicePixelRatio; canvas.height = H*devicePixelRatio;
-  ctx.scale(devicePixelRatio, devicePixelRatio);
-  ctx.clearRect(0,0,W,H);
-
-  if (!nodes.length) {
-    ctx.fillStyle='#999'; ctx.font='13px Georgia'; ctx.textAlign='center';
-    ctx.fillText('No accounts collected.', W/2, H/2); return;
-  }
-
-  const n = nodes.length;
-  const cx=W/2, cy=H/2, R=Math.min(W,H)*0.34;
-  let pos = nodes.map((_,i)=>({x:cx+R*Math.cos(2*Math.PI*i/n-Math.PI/2), y:cy+R*Math.sin(2*Math.PI*i/n-Math.PI/2)}));
-
-  // Force-directed (80 iters)
-  for (let it=0;it<80;it++){
-    const f=pos.map(()=>({x:0,y:0}));
-    for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
-      const dx=pos[i].x-pos[j].x,dy=pos[i].y-pos[j].y,d=Math.max(Math.sqrt(dx*dx+dy*dy),1),k=900/(d*d);
-      f[i].x+=dx/d*k; f[i].y+=dy/d*k; f[j].x-=dx/d*k; f[j].y-=dy/d*k;
-    }
-    for(const e of edges){
-      const ai=nodes.findIndex(nd=>nd.key===e.source), bi=nodes.findIndex(nd=>nd.key===e.target);
-      if(ai<0||bi<0) continue;
-      const dx=pos[bi].x-pos[ai].x,dy=pos[bi].y-pos[ai].y,d=Math.max(Math.sqrt(dx*dx+dy*dy),1),k=(d-110)*0.04*e.score;
-      f[ai].x+=dx/d*k; f[ai].y+=dy/d*k; f[bi].x-=dx/d*k; f[bi].y-=dy/d*k;
-    }
-    for(let i=0;i<n;i++){
-      f[i].x+=(cx-pos[i].x)*0.012; f[i].y+=(cy-pos[i].y)*0.012;
-      pos[i].x=Math.max(38,Math.min(W-38,pos[i].x+f[i].x*0.5));
-      pos[i].y=Math.max(38,Math.min(H-38,pos[i].y+f[i].y*0.5));
-    }
-  }
-
-  // Edges
-  for(const e of edges){
-    const ai=nodes.findIndex(nd=>nd.key===e.source), bi=nodes.findIndex(nd=>nd.key===e.target);
-    if(ai<0||bi<0) continue;
-    const alpha=0.15+(e.score-0.5)*1.5;
-    const g=Math.round(26+e.score*81), r2=Math.round(139-e.score*113);
-    ctx.beginPath(); ctx.moveTo(pos[ai].x,pos[ai].y); ctx.lineTo(pos[bi].x,pos[bi].y);
-    ctx.strokeStyle=`rgba(${r2},${g},26,${Math.min(0.85,alpha)})`; ctx.lineWidth=0.8+e.score*3; ctx.stroke();
-    const mx=(pos[ai].x+pos[bi].x)/2,my=(pos[ai].y+pos[bi].y)/2;
-    ctx.font='9px Courier New'; ctx.fillStyle=`rgba(80,80,80,${Math.min(0.7,alpha+0.1)})`; ctx.textAlign='center';
-    ctx.fillText(e.score.toFixed(2),mx,my-2);
-  }
-
-  // Nodes
-  for(let i=0;i<n;i++){
-    const nd=nodes[i], col=PLAT_COLORS[nd.platform]||'#888', r2=16;
-    ctx.beginPath(); ctx.arc(pos[i].x,pos[i].y,r2,0,2*Math.PI);
-    ctx.fillStyle=col+'28'; ctx.fill(); ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.stroke();
-    const lbl=nd.username.length>9?nd.username.slice(0,8)+'…':nd.username;
-    ctx.font='bold 10px Courier New'; ctx.fillStyle='#1a1a1a'; ctx.textAlign='center';
-    ctx.fillText(lbl,pos[i].x,pos[i].y+3);
-    ctx.font='8px Courier New'; ctx.fillStyle='#999';
-    ctx.fillText(nd.platform,pos[i].x,pos[i].y+r2+9);
-  }
-
-  // Click handler
-  canvas.onclick = (ev) => {
-    const rect=canvas.getBoundingClientRect();
-    const mx=(ev.clientX-rect.left), my=(ev.clientY-rect.top);
-    for(let i=0;i<n;i++){
-      if(Math.sqrt((mx-pos[i].x)**2+(my-pos[i].y)**2)<20){
-        document.getElementById('s-q').value=nodes[i].key;
-        nav('search'); doSearch(); break;
-      }
-    }
-  };
-}
-
 // ─── Train ────────────────────────────────────────────────────────────────────
 async function doTrain() {
   const btn=document.getElementById('t-btn');
@@ -766,11 +653,9 @@ function nav(name) {
       (name==='collect'&&b.textContent==='Collect')||
       (name==='analyze'&&b.textContent==='Analyze pair')||
       (name==='search'&&b.textContent==='Search')||
-      (name==='graph'&&b.textContent==='Network graph')||
       (name==='train'&&b.textContent==='Train model')
     );
   });
-  if (name==='graph') setTimeout(loadGraph, 60);
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

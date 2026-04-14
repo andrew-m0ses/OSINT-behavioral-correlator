@@ -393,45 +393,6 @@ def get_links():
     return {"links": load_links(), "count": len(load_links())}
 
 
-@app.get("/api/graph")
-def graph_data(min_score: float = 0.60):
-    """
-    Return graph nodes + edges for the network visualization.
-    Edges are filtered by min_score.
-    """
-    all_feats = load_all_features()
-    keys      = list(all_feats.keys())
-    nodes = []
-    for key in keys:
-        feat = all_feats[key]
-        nodes.append({
-            "key":      key,
-            "platform": feat["platform"],
-            "username": feat["username"],
-            "post_count": feat["post_count"],
-            "summary":  feat.get("summary", {}),
-        })
-
-    edges = []
-    for i in range(len(keys)):
-        for j in range(i+1, len(keys)):
-            score = _score_pair(all_feats[keys[i]], all_feats[keys[j]])
-            if score >= min_score:
-                edges.append({
-                    "source": keys[i],
-                    "target": keys[j],
-                    "score":  round(score, 4),
-                })
-
-    edges.sort(key=lambda e: -e["score"])
-    return {
-        "nodes": nodes,
-        "edges": edges,
-        "model_used": _model is not None,
-        "min_score":  min_score,
-    }
-
-
 @app.post("/api/pipeline")
 async def run_pipeline(req: PipelineRequest, background_tasks: BackgroundTasks):
     """
