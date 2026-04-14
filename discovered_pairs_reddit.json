@@ -1,0 +1,26 @@
+[
+  {
+    "reddit_user": "Repeat_Admirable",
+    "github_user": "yg1112",
+    "github_events": 5,
+    "match_type": "bio-link"
+  },
+  {
+    "reddit_user": "gkanellopoulos",
+    "github_user": "gkanellopoulos",
+    "github_events": 5,
+    "match_type": "exact"
+  },
+  {
+    "reddit_user": "metekillot",
+    "github_user": "Metekillot",
+    "github_events": 5,
+    "match_type": "exact"
+  },
+  {
+    "reddit_user": "notreallymetho",
+    "github_user": "agentic-research",
+    "github_events": 3,
+    "match_type": "bio-link"
+  }
+]

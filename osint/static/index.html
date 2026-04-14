@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OSINT Behavioral Correlator</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f0f0f0; --surface: #ffffff; --border: #d0d0d0; --border-light: #e8e8e8;
+  --text: #1a1a1a; --muted: #666; --faint: #999;
+  --accent: #2a5298; --accent-bg: #edf0f8;
+  --green: #1a6b2a; --green-bg: #eaf3ec; --green-border: #b0ccb5;
+  --red: #8b1a1a; --red-bg: #f8eaea; --red-border: #ccb0b0;
+  --yellow: #7a5800; --yellow-bg: #fdf6e3; --yellow-border: #ccc099;
+  --font: Georgia, 'Times New Roman', serif;
+  --mono: 'Courier New', Courier, monospace;
+}
+body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+
+.shell { display: grid; grid-template-columns: 210px 1fr; grid-template-rows: 38px 1fr; min-height: 100vh; }
+.header { grid-column: 1/-1; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 14px; gap: 12px; }
+.header-title { font-size: 13px; color: var(--muted); }
+.header-title strong { color: var(--text); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.server-dot { width: 7px; height: 7px; border-radius: 50%; background: #ccc; }
+.server-dot.ok { background: var(--green); }
+.server-dot.err { background: var(--red); }
+.server-label { font-size: 11px; color: var(--faint); font-family: var(--mono); }
+
+.sidebar { background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; }
+.sidebar-section { padding: 10px 0; border-bottom: 1px solid var(--border-light); }
+.sidebar-label { font-size: 10px; font-family: var(--mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--faint); padding: 0 10px; margin-bottom: 3px; }
+.nav-btn { display: block; width: 100%; text-align: left; padding: 6px 10px; background: none; border: none; border-left: 2px solid transparent; cursor: pointer; font-family: var(--font); font-size: 13px; color: var(--muted); }
+.nav-btn:hover { background: var(--bg); color: var(--text); }
+.nav-btn.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-bg); }
+.acc-item { padding: 4px 10px; font-size: 11px; font-family: var(--mono); color: var(--muted); display: flex; align-items: center; gap: 5px; cursor: pointer; border-left: 2px solid transparent; }
+.acc-item:hover { background: var(--bg); }
+.acc-item.sel { border-left-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+.dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+.main { background: var(--bg); padding: 16px; overflow-y: auto; }
+.panel { display: none; } .panel.active { display: block; }
+
+.card { background: var(--surface); border: 1px solid var(--border); margin-bottom: 12px; }
+.card-head { padding: 8px 12px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; }
+.card-title { font-size: 11px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.card-body { padding: 12px; }
+
+.row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.row label { font-size: 12px; color: var(--muted); min-width: 80px; }
+input[type=text], input[type=number], select {
+  font-family: var(--mono); font-size: 12px; padding: 4px 7px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); flex: 1;
+}
+input:focus, select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+button { font-family: var(--font); font-size: 12px; padding: 4px 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+button:hover { background: var(--bg); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover { opacity: 0.88; }
+button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; font-size: 10px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--faint); padding: 5px 8px; border-bottom: 1px solid var(--border); font-weight: normal; }
+td { padding: 6px 8px; border-bottom: 1px solid var(--border-light); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--bg); }
+
+.verdict { padding: 10px 12px; border: 1px solid; margin-bottom: 12px; display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.verdict.match  { border-color: var(--green-border); background: var(--green-bg); }
+.verdict.middle { border-color: var(--yellow-border); background: var(--yellow-bg); }
+.verdict.nomatch{ border-color: var(--red-border);   background: var(--red-bg); }
+.verdict-score  { font-family: var(--mono); font-size: 26px; font-weight: bold; line-height: 1; }
+.verdict-label  { font-size: 13px; font-weight: bold; margin-bottom: 2px; }
+.verdict-sub    { font-size: 11px; color: var(--muted); }
+
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1px; background: var(--border-light); border: 1px solid var(--border); margin-bottom: 12px; }
+.stat { background: var(--surface); padding: 8px 10px; }
+.stat-label { font-size: 10px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--faint); margin-bottom: 2px; }
+.stat-val { font-size: 15px; font-family: var(--mono); }
+.stat-sub { font-size: 10px; color: var(--muted); }
+
+.bar-wrap { display: flex; align-items: center; gap: 7px; }
+.bar { height: 5px; background: var(--border-light); width: 100px; flex-shrink: 0; }
+.bar-fill { height: 100%; }
+.mono { font-family: var(--mono); }
+
+.log { font-family: var(--mono); font-size: 11px; background: #1c1c1c; color: #bbb; padding: 8px 10px; max-height: 140px; overflow-y: auto; line-height: 1.55; }
+.log .ok   { color: #7ec87e; } .log .warn { color: #d4b84a; }
+.log .err  { color: #d47a7a; } .log .info { color: #7ab4d4; }
+
+.tag { display: inline-block; font-size: 10px; font-family: var(--mono); padding: 1px 5px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); }
+.tag.g { border-color: var(--green-border); background: var(--green-bg); color: var(--green); }
+.tag.y { border-color: var(--yellow-border); background: var(--yellow-bg); color: var(--yellow); }
+.tag.r { border-color: var(--red-border); background: var(--red-bg); color: var(--red); }
+.tag.b { border-color: #99aad4; background: var(--accent-bg); color: var(--accent); }
+
+.sig-s { color: var(--green); font-size: 11px; }
+.sig-p { color: var(--yellow); font-size: 11px; }
+.sig-w { color: var(--red); font-size: 11px; }
+
+.empty { padding: 24px; text-align: center; color: var(--faint); font-size: 13px; }
+.progress { height: 3px; background: var(--border-light); margin: 6px 0; }
+.progress-fill { height: 100%; background: var(--accent); transition: width .4s; }
+canvas { display: block; width: 100%; border: 1px solid var(--border); background: var(--surface); }
+hr { border: none; border-top: 1px solid var(--border-light); margin: 12px 0; }
+
+.err-banner { background: var(--red-bg); border: 1px solid var(--red-border); color: var(--red); padding: 8px 12px; font-size: 12px; margin-bottom: 10px; }
+.loading { display: inline-block; width: 10px; height: 10px; border: 1.5px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; margin-right: 6px; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 680px) { .two-col { grid-template-columns: 1fr; } .shell { grid-template-columns: 1fr; } .sidebar { display: none; } }
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- Header -->
+<header class="header">
+  <div class="header-title"><strong>OSINT Behavioral Correlator</strong> &nbsp;—&nbsp; cross-platform persona analysis</div>
+  <div class="header-right">
+    <span class="server-dot" id="srv-dot"></span>
+    <span class="server-label" id="srv-label">connecting...</span>
+    <span class="tag b" id="mode-tag">feature cosine</span>
+  </div>
+</header>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">Navigation</div>
+    <button class="nav-btn active" onclick="nav('collect')">Collect</button>
+    <button class="nav-btn" onclick="nav('analyze')">Analyze pair</button>
+    <button class="nav-btn" onclick="nav('search')">Search</button>
+    <button class="nav-btn" onclick="nav('graph')">Network graph</button>
+    <button class="nav-btn" onclick="nav('train')">Train model</button>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Accounts (<span id="sb-count">0</span>)</div>
+    <div id="sb-accounts"><div class="acc-item" style="color:var(--faint)">none</div></div>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Identity links (<span id="sb-links">0</span>)</div>
+    <div id="sb-links-list"><div class="acc-item" style="color:var(--faint)">none found</div></div>
+  </div>
+</nav>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- COLLECT -->
+  <div class="panel active" id="panel-collect">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Add account</span></div>
+      <div class="card-body">
+        <div class="row">
+          <label>Platform</label>
+          <select id="c-plat" style="max-width:130px">
+            <option value="hn">Hacker News</option>
+            <option value="github">GitHub</option>
+            <option value="reddit">Reddit</option>
+            <option value="youtube">YouTube</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>Username</label>
+          <input type="text" id="c-user" placeholder="e.g. tptacek" onkeydown="if(event.key==='Enter')doCollect()">
+        </div>
+        <div class="row">
+          <label>Max posts</label>
+          <input type="text" id="c-max" value="300" style="max-width:60px">
+          <label style="min-width:0;margin-left:10px"><input type="checkbox" id="c-force"> Re-collect if cached</label>
+          <button class="primary" id="c-btn" onclick="doCollect()" style="margin-left:auto">Collect</button>
+        </div>
+        <div style="font-size:11px;color:var(--faint);margin-top:4px">
+          HN + GitHub: free, no auth &nbsp;|&nbsp; Reddit: public JSON &nbsp;|&nbsp; YouTube: set YOUTUBE_API_KEY env var
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Log</span>
+        <button onclick="document.getElementById('log').innerHTML=''" style="font-size:10px">clear</button>
+      </div>
+      <div class="log" id="log"><span class="info">Ready. Server at http://localhost:8000</span></div>
+    </div>
+    <div id="fp-table"></div>
+  </div>
+
+  <!-- ANALYZE -->
+  <div class="panel" id="panel-analyze">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Compare two accounts</span></div>
+      <div class="card-body">
+        <div class="row"><label>Account A</label><select id="a-a" style="flex:1"></select></div>
+        <div class="row"><label>Account B</label><select id="a-b" style="flex:1"></select></div>
+        <div class="row">
+          <label>Threshold</label>
+          <input type="text" id="a-thresh" value="0.75" style="max-width:60px">
+          <span style="font-size:11px;color:var(--faint);margin-left:6px">score ≥ threshold → match verdict</span>
+          <button class="primary" onclick="doAnalyze()" style="margin-left:auto">Analyze</button>
+        </div>
+      </div>
+    </div>
+    <div id="a-result"></div>
+  </div>
+
+  <!-- SEARCH -->
+  <div class="panel" id="panel-search">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Find matches</span></div>
+      <div class="card-body">
+        <div class="row"><label>Query account</label><select id="s-q" style="flex:1"></select></div>
+        <div class="row">
+          <label>Platform filter</label>
+          <select id="s-plat" style="max-width:130px">
+            <option value="">All</option>
+            <option value="hn">Hacker News</option>
+            <option value="github">GitHub</option>
+            <option value="reddit">Reddit</option>
+            <option value="youtube">YouTube</option>
+          </select>
+          <label style="min-width:60px;margin-left:10px">Min score</label>
+          <input type="text" id="s-min" value="0.55" style="max-width:55px">
+          <button class="primary" onclick="doSearch()" style="margin-left:auto">Search</button>
+        </div>
+      </div>
+    </div>
+    <div id="s-result"></div>
+  </div>
+
+  <!-- GRAPH -->
+  <div class="panel" id="panel-graph">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Network graph</span>
+        <span style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)">
+          Min edge: <input type="text" id="g-thresh" value="0.60" style="width:38px;font-size:11px">
+          <button onclick="loadGraph()">Redraw</button>
+        </span>
+      </div>
+      <canvas id="g-canvas" height="420"></canvas>
+      <div style="padding:6px 12px;font-size:11px;color:var(--faint);border-top:1px solid var(--border-light)">
+        Node size ∝ post count &nbsp;|&nbsp; Edge opacity ∝ similarity &nbsp;|&nbsp; Click node to search
+      </div>
+    </div>
+    <div id="g-legend" style="font-size:11px;color:var(--muted);padding:0 0 12px;display:flex;gap:14px;flex-wrap:wrap"></div>
+  </div>
+
+  <!-- TRAIN -->
+  <div class="panel" id="panel-train">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Model training</span></div>
+      <div class="card-body">
+        <div class="two-col" style="margin-bottom:12px">
+          <div>
+            <div class="row"><label>Epochs</label><input type="number" id="t-epochs" value="50" style="max-width:70px"></div>
+            <div class="row"><label>Batch size</label><input type="number" id="t-batch" value="256" style="max-width:70px"></div>
+            <div class="row"><label>Learning rate</label><input type="text" id="t-lr" value="0.0003" style="max-width:80px"></div>
+            <div class="row"><label>Margin</label><input type="text" id="t-margin" value="0.3" style="max-width:60px"></div>
+            <div class="row"><label>Patience</label><input type="number" id="t-patience" value="8" style="max-width:60px"></div>
+          </div>
+          <div>
+            <div id="train-status-box" class="stats-grid" style="grid-template-columns:1fr 1fr">
+              <div class="stat"><div class="stat-label">Status</div><div class="stat-val" id="ts-status" style="font-size:13px">—</div></div>
+              <div class="stat"><div class="stat-label">Best F1</div><div class="stat-val" id="ts-f1">—</div></div>
+              <div class="stat"><div class="stat-label">Epoch</div><div class="stat-val" id="ts-epoch">—</div></div>
+              <div class="stat"><div class="stat-label">Model</div><div class="stat-val" id="ts-model" style="font-size:11px">not loaded</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="progress"><div class="progress-fill" id="t-progress" style="width:0%"></div></div>
+        <div class="log" id="t-log" style="max-height:120px"><span class="info">Training log will appear here.</span></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="primary" id="t-btn" onclick="doTrain()">Start training</button>
+          <button onclick="reloadModel()">Reload model from disk</button>
+          <button onclick="mineLinks()">Mine identity links</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">CLI reference</span></div>
+      <div class="card-body" style="font-family:var(--mono);font-size:11px;color:var(--muted);line-height:2">
+        <div><span style="color:var(--faint)"># collect + run pipeline then train from terminal:</span></div>
+        <div>python -m osint collect hn:tptacek github:tptacek reddit:username</div>
+        <div>python -m osint mine-links</div>
+        <div>python -m osint pipeline hn:x github:y hn:z github:w</div>
+        <div>python -m osint train --epochs 50</div>
+        <div>python -m osint analyze hn:x github:y</div>
+        <div>python -m osint search hn:x --top 10</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────────
+const API = 'http://localhost:8000/api';
+const PLAT_COLORS = { hn:'#FF6600', github:'#1a6b2a', reddit:'#FF4500', youtube:'#cc0000', twitter:'#1D9BF0', telegram:'#1a5276' };
+const PLAT_LABELS = { hn:'Hacker News', github:'GitHub', reddit:'Reddit', youtube:'YouTube', twitter:'Twitter/X', telegram:'Telegram' };
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let accounts = [];   // array of account objects from /api/accounts
+let serverOk = false;
+let trainPollId = null;
+
+// ─── API helpers ──────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(API + path, opts);
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({detail: r.statusText}));
+    throw new Error(err.detail || r.statusText);
+  }
+  return r.json();
+}
+
+// ─── Logging ──────────────────────────────────────────────────────────────────
+function lg(type, msg, target='log') {
+  const el = document.getElementById(target);
+  const t = new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const line = document.createElement('div');
+  line.className = type;
+  line.textContent = `[${t}] ${msg}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ─── Server status poll ────────────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const s = await api('GET', '/status');
+    serverOk = true;
+    document.getElementById('srv-dot').className = 'server-dot ok';
+    document.getElementById('srv-label').textContent = `${s.accounts} accounts`;
+    document.getElementById('mode-tag').textContent = s.model.mode === 'siamese_model' ? 'siamese model' : 'feature cosine';
+    document.getElementById('ts-model').textContent = s.model.loaded ? 'loaded' : 'not loaded';
+    await refreshAccounts();
+  } catch(e) {
+    serverOk = false;
+    document.getElementById('srv-dot').className = 'server-dot err';
+    document.getElementById('srv-label').textContent = 'server offline';
+  }
+}
+
+// ─── Accounts ─────────────────────────────────────────────────────────────────
+async function refreshAccounts() {
+  try {
+    const r = await api('GET', '/accounts');
+    accounts = r.accounts;
+    document.getElementById('sb-count').textContent = accounts.length;
+    renderSidebarAccounts();
+    updateSelects();
+    renderFpTable();
+    // Also refresh links
+    const lr = await api('GET', '/links');
+    document.getElementById('sb-links').textContent = lr.count;
+    renderSidebarLinks(lr.links);
+  } catch(e) {}
+}
+
+function renderSidebarAccounts() {
+  const el = document.getElementById('sb-accounts');
+  if (!accounts.length) { el.innerHTML='<div class="acc-item" style="color:var(--faint)">none</div>'; return; }
+  el.innerHTML = accounts.map(a => `
+    <div class="acc-item" onclick="quickSearch('${a.key}')">
+      <span class="dot" style="background:${PLAT_COLORS[a.platform]||'#888'}"></span>${a.key}
+    </div>`).join('');
+}
+
+function renderSidebarLinks(links) {
+  const el = document.getElementById('sb-links-list');
+  if (!links.length) { el.innerHTML='<div class="acc-item" style="color:var(--faint)">none found</div>'; return; }
+  el.innerHTML = links.slice(0,8).map(l =>
+    `<div class="acc-item" style="font-size:10px;padding:3px 10px">${l.from||''} → ${l.to||''}</div>`
+  ).join('') + (links.length>8 ? `<div class="acc-item" style="color:var(--faint)">+${links.length-8} more</div>` : '');
+}
+
+function updateSelects() {
+  const opts = accounts.map(a=>`<option value="${a.key}">${a.key}</option>`).join('');
+  const fallback = '<option value="">-- collect accounts first --</option>';
+  ['a-a','a-b','s-q'].forEach(id => {
+    const el = document.getElementById(id);
+    const prev = el.value;
+    el.innerHTML = opts || fallback;
+    if (accounts.find(a=>a.key===prev)) el.value = prev;
+    else if (id==='a-b' && accounts.length>1) el.selectedIndex=1;
+  });
+}
+
+function renderFpTable() {
+  const el = document.getElementById('fp-table');
+  if (!accounts.length) { el.innerHTML=''; return; }
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-head"><span class="card-title">Collected fingerprints</span></div>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Account</th><th>Posts</th><th>Peak hr</th><th>Weekend</th>
+          <th>Burst</th><th>Sent len</th><th>Vocab</th><th>Ellipsis/k</th><th>Reply</th><th></th>
+        </tr></thead>
+        <tbody>${accounts.map(a=>{
+          const s = a.summary||{};
+          return `<tr>
+            <td><span class="dot" style="background:${PLAT_COLORS[a.platform]||'#888'};display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle"></span><span class="mono">${a.key}</span></td>
+            <td class="mono">${a.post_count}</td>
+            <td class="mono">${String(s.peak_hour??'?').padStart(2,'0')}:00</td>
+            <td class="mono">${((s.weekend_ratio??0)*100).toFixed(0)}%</td>
+            <td class="mono">${(s.burst_score??0).toFixed(2)}</td>
+            <td class="mono">${(s.avg_sent_len??0).toFixed(1)}</td>
+            <td class="mono">${(s.vocab_richness??0).toFixed(2)}</td>
+            <td class="mono">${((s.ellipsis_freq??0)*1000).toFixed(2)}</td>
+            <td class="mono">${((s.reply_ratio??0)*100).toFixed(0)}%</td>
+            <td><button onclick="deleteAccount('${a.key}')" style="font-size:10px;padding:2px 6px;color:var(--red)">×</button></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+      </div>
+    </div>`;
+}
+
+// ─── Collect ──────────────────────────────────────────────────────────────────
+async function doCollect() {
+  if (!serverOk) { lg('err','Server offline — start with: python -m osint.server'); return; }
+  const platform = document.getElementById('c-plat').value;
+  const username = document.getElementById('c-user').value.trim().replace(/^@/,'');
+  const max_posts = parseInt(document.getElementById('c-max').value)||300;
+  const force = document.getElementById('c-force').checked;
+  if (!username) return;
+
+  const btn = document.getElementById('c-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="loading"></span>Collecting...';
+  lg('info', `Collecting ${platform}:${username} (max ${max_posts} posts, force=${force})...`);
+
+  try {
+    const r = await api('POST', '/collect', {platform, username, max_posts, force});
+    const s = r.summary||{};
+    lg('ok', `✓ ${r.account} — ${r.post_count} posts | peak ${String(s.peak_hour??0).padStart(2,'0')}:00 | vocab ${(s.vocab_richness??0).toFixed(2)}${r.cached?' [cached]':''}`);
+    if (r.links_found?.length) {
+      r.links_found.forEach(l => lg('info', `  link: ${l.from} → ${l.to} (${l.source})`));
+    }
+    document.getElementById('c-user').value = '';
+    await refreshAccounts();
+  } catch(e) {
+    lg('err', `✗ ${e.message}`);
+  }
+  btn.disabled = false; btn.textContent = 'Collect';
+}
+
+async function deleteAccount(key) {
+  const [plat, user] = key.split(':');
+  if (!confirm(`Delete ${key}?`)) return;
+  try {
+    await api('DELETE', `/accounts/${plat}/${user}`);
+    lg('warn', `Deleted ${key}`);
+    await refreshAccounts();
+  } catch(e) { lg('err', e.message); }
+}
+
+// ─── Analyze ──────────────────────────────────────────────────────────────────
+async function doAnalyze() {
+  const account_a = document.getElementById('a-a').value;
+  const account_b = document.getElementById('a-b').value;
+  const threshold = parseFloat(document.getElementById('a-thresh').value)||0.75;
+  if (!account_a || !account_b || account_a===account_b) {
+    document.getElementById('a-result').innerHTML='<div class="err-banner">Select two different accounts.</div>'; return;
+  }
+  document.getElementById('a-result').innerHTML='<div class="empty"><span class="loading"></span>Analyzing...</div>';
+  try {
+    const r = await api('POST', '/analyze', {account_a, account_b, threshold});
+    renderAnalysis(r);
+  } catch(e) {
+    document.getElementById('a-result').innerHTML=`<div class="err-banner">${e.message}</div>`;
+  }
+}
+
+function renderAnalysis(r) {
+  const vcls = r.score>=r.threshold?'match':r.score>=0.55?'middle':'nomatch';
+  const sa=r.summary_a||{}, sb=r.summary_b||{};
+
+  const statRows = [
+    ['Posts',          r.post_count_a,                   r.post_count_b,                   null],
+    ['Peak hour',      `${String(sa.peak_hour??0).padStart(2,'0')}:00`, `${String(sb.peak_hour??0).padStart(2,'0')}:00`, Math.abs((sa.peak_hour??0)-(sb.peak_hour??0))<=2],
+    ['Weekend ratio',  `${((sa.weekend_ratio??0)*100).toFixed(0)}%`, `${((sb.weekend_ratio??0)*100).toFixed(0)}%`, Math.abs((sa.weekend_ratio??0)-(sb.weekend_ratio??0))<0.1],
+    ['Burst score',    (sa.burst_score??0).toFixed(2),   (sb.burst_score??0).toFixed(2),   Math.abs((sa.burst_score??0)-(sb.burst_score??0))<0.15],
+    ['Avg sent len',   `${(sa.avg_sent_len??0).toFixed(1)}w`, `${(sb.avg_sent_len??0).toFixed(1)}w`, Math.abs((sa.avg_sent_len??0)-(sb.avg_sent_len??0))<4],
+    ['Vocab richness', (sa.vocab_richness??0).toFixed(2),(sb.vocab_richness??0).toFixed(2),Math.abs((sa.vocab_richness??0)-(sb.vocab_richness??0))<1],
+    ['Ellipsis /1k',   ((sa.ellipsis_freq??0)*1000).toFixed(2), ((sb.ellipsis_freq??0)*1000).toFixed(2), Math.abs((sa.ellipsis_freq??0)-(sb.ellipsis_freq??0))<0.005],
+    ['Reply ratio',    `${((sa.reply_ratio??0)*100).toFixed(0)}%`, `${((sb.reply_ratio??0)*100).toFixed(0)}%`, Math.abs((sa.reply_ratio??0)-(sb.reply_ratio??0))<0.15],
+  ];
+
+  document.getElementById('a-result').innerHTML = `
+    <div class="verdict ${vcls}">
+      <div>
+        <div class="verdict-score">${r.score.toFixed(4)}</div>
+        <div style="font-size:10px;color:var(--muted);font-family:var(--mono)">similarity</div>
+      </div>
+      <div>
+        <div class="verdict-label">${r.verdict}</div>
+        <div class="verdict-sub">Confidence: ${r.confidence} &nbsp;|&nbsp; Threshold: ${r.threshold} &nbsp;|&nbsp; ${r.model_used?'Siamese model':'Feature cosine'}</div>
+        <div class="verdict-sub" style="margin-top:3px">${r.account_a} &nbsp;↔&nbsp; ${r.account_b}</div>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head"><span class="card-title">Feature breakdown</span></div>
+        <table>
+          <thead><tr><th>Feature</th><th>Score</th><th>Signal</th></tr></thead>
+          <tbody>${(r.features||[]).map(f=>{
+            const pct=Math.round(f.score*100);
+            const col=f.score>=0.82?'#1a6b2a':f.score>=0.60?'#7a5800':'#8b1a1a';
+            const scls=f.score>=0.82?'sig-s':f.score>=0.60?'sig-p':'sig-w';
+            return `<tr>
+              <td>${f.feature}</td>
+              <td><div class="bar-wrap"><div class="bar"><div class="bar-fill" style="width:${pct}%;background:${col}"></div></div><span class="mono" style="font-size:11px">${f.score.toFixed(3)}</span></div></td>
+              <td><span class="${scls}">${f.signal}</span></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Side-by-side</span></div>
+        <table>
+          <thead><tr><th>Metric</th><th>${r.account_a.split(':')[1]}</th><th>${r.account_b.split(':')[1]}</th></tr></thead>
+          <tbody>${statRows.map(([lbl,va,vb,m])=>`
+            <tr>
+              <td>${lbl}</td>
+              <td class="mono" style="font-size:12px${m===true?';color:var(--green)':m===false?';color:var(--red)':''}">${va}</td>
+              <td class="mono" style="font-size:12px${m===true?';color:var(--green)':m===false?';color:var(--red)':''}">${vb}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ─── Search ───────────────────────────────────────────────────────────────────
+async function doSearch() {
+  const account = document.getElementById('s-q').value;
+  const platform_filter = document.getElementById('s-plat').value || null;
+  const min_score = parseFloat(document.getElementById('s-min').value)||0.55;
+  if (!account) return;
+  document.getElementById('s-result').innerHTML='<div class="empty"><span class="loading"></span>Searching...</div>';
+  try {
+    const r = await api('POST', '/search', {account, platform_filter, min_score, top_k:20});
+    renderSearch(r);
+  } catch(e) {
+    document.getElementById('s-result').innerHTML=`<div class="err-banner">${e.message}</div>`;
+  }
+}
+
+function renderSearch(r) {
+  if (!r.results.length) {
+    document.getElementById('s-result').innerHTML=`<div class="card"><div class="empty">No accounts found above score ${document.getElementById('s-min').value}. Try lowering the threshold or collecting more accounts.</div></div>`;
+    return;
+  }
+  document.getElementById('s-result').innerHTML = `
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Results for ${r.query}</span>
+        <span style="font-size:11px;color:var(--faint)">${r.results.length} result${r.results.length!==1?'s':''} / ${r.total_found} total &nbsp;|&nbsp; ${r.model_used?'Siamese model':'Feature cosine'}</span>
+      </div>
+      <table>
+        <thead><tr><th>#</th><th>Account</th><th>Score</th><th>Confidence</th><th>Peak hr</th><th>Posts</th><th></th></tr></thead>
+        <tbody>${r.results.map((res,i)=>{
+          const conf = res.score>=0.88?'Very high':res.score>=0.78?'High':res.score>=0.65?'Medium':'Low';
+          const tcls = res.score>=0.78?'g':res.score>=0.65?'y':'';
+          return `<tr>
+            <td class="mono" style="color:var(--faint)">${i+1}</td>
+            <td><span class="dot" style="background:${PLAT_COLORS[res.platform]||'#888'};display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle"></span><span class="mono">${res.key}</span></td>
+            <td class="mono">${res.score.toFixed(4)}</td>
+            <td><span class="tag ${tcls}">${conf}</span></td>
+            <td class="mono">${String(res.summary?.peak_hour??0).padStart(2,'0')}:00</td>
+            <td class="mono">${res.post_count}</td>
+            <td><button onclick="analyzeFromSearch('${r.query}','${res.key}')" style="font-size:10px;padding:2px 7px">Analyze →</button></td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function quickSearch(key) {
+  document.getElementById('s-q').value = key;
+  nav('search');
+  doSearch();
+}
+function analyzeFromSearch(a,b) {
+  document.getElementById('a-a').value=a;
+  document.getElementById('a-b').value=b;
+  nav('analyze');
+  doAnalyze();
+}
+
+// ─── Graph ────────────────────────────────────────────────────────────────────
+async function loadGraph() {
+  const minScore = parseFloat(document.getElementById('g-thresh').value)||0.60;
+  try {
+    const r = await api('GET', `/graph?min_score=${minScore}`);
+    drawGraph(r.nodes, r.edges);
+    const platsSeen = [...new Set(r.nodes.map(n=>n.platform))];
+    document.getElementById('g-legend').innerHTML =
+      platsSeen.map(p=>`<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:${PLAT_COLORS[p]||'#888'};display:inline-block"></span>${PLAT_LABELS[p]||p}</span>`).join('') +
+      `<span style="margin-left:auto;color:var(--faint)">${r.edges.length} edge${r.edges.length!==1?'s':''} ≥ ${minScore}</span>`;
+  } catch(e) {
+    const canvas=document.getElementById('g-canvas');
+    const ctx=canvas.getContext('2d');
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle='#999'; ctx.font='13px Georgia'; ctx.textAlign='center';
+    ctx.fillText(serverOk?'No accounts collected yet.':'Server offline.', canvas.offsetWidth/2, 200);
+  }
+}
+
+function drawGraph(nodes, edges) {
+  const canvas = document.getElementById('g-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth||600, H=420;
+  canvas.width = W*devicePixelRatio; canvas.height = H*devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  ctx.clearRect(0,0,W,H);
+
+  if (!nodes.length) {
+    ctx.fillStyle='#999'; ctx.font='13px Georgia'; ctx.textAlign='center';
+    ctx.fillText('No accounts collected.', W/2, H/2); return;
+  }
+
+  const n = nodes.length;
+  const cx=W/2, cy=H/2, R=Math.min(W,H)*0.34;
+  let pos = nodes.map((_,i)=>({x:cx+R*Math.cos(2*Math.PI*i/n-Math.PI/2), y:cy+R*Math.sin(2*Math.PI*i/n-Math.PI/2)}));
+
+  // Force-directed (80 iters)
+  for (let it=0;it<80;it++){
+    const f=pos.map(()=>({x:0,y:0}));
+    for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
+      const dx=pos[i].x-pos[j].x,dy=pos[i].y-pos[j].y,d=Math.max(Math.sqrt(dx*dx+dy*dy),1),k=900/(d*d);
+      f[i].x+=dx/d*k; f[i].y+=dy/d*k; f[j].x-=dx/d*k; f[j].y-=dy/d*k;
+    }
+    for(const e of edges){
+      const ai=nodes.findIndex(nd=>nd.key===e.source), bi=nodes.findIndex(nd=>nd.key===e.target);
+      if(ai<0||bi<0) continue;
+      const dx=pos[bi].x-pos[ai].x,dy=pos[bi].y-pos[ai].y,d=Math.max(Math.sqrt(dx*dx+dy*dy),1),k=(d-110)*0.04*e.score;
+      f[ai].x+=dx/d*k; f[ai].y+=dy/d*k; f[bi].x-=dx/d*k; f[bi].y-=dy/d*k;
+    }
+    for(let i=0;i<n;i++){
+      f[i].x+=(cx-pos[i].x)*0.012; f[i].y+=(cy-pos[i].y)*0.012;
+      pos[i].x=Math.max(38,Math.min(W-38,pos[i].x+f[i].x*0.5));
+      pos[i].y=Math.max(38,Math.min(H-38,pos[i].y+f[i].y*0.5));
+    }
+  }
+
+  // Edges
+  for(const e of edges){
+    const ai=nodes.findIndex(nd=>nd.key===e.source), bi=nodes.findIndex(nd=>nd.key===e.target);
+    if(ai<0||bi<0) continue;
+    const alpha=0.15+(e.score-0.5)*1.5;
+    const g=Math.round(26+e.score*81), r2=Math.round(139-e.score*113);
+    ctx.beginPath(); ctx.moveTo(pos[ai].x,pos[ai].y); ctx.lineTo(pos[bi].x,pos[bi].y);
+    ctx.strokeStyle=`rgba(${r2},${g},26,${Math.min(0.85,alpha)})`; ctx.lineWidth=0.8+e.score*3; ctx.stroke();
+    const mx=(pos[ai].x+pos[bi].x)/2,my=(pos[ai].y+pos[bi].y)/2;
+    ctx.font='9px Courier New'; ctx.fillStyle=`rgba(80,80,80,${Math.min(0.7,alpha+0.1)})`; ctx.textAlign='center';
+    ctx.fillText(e.score.toFixed(2),mx,my-2);
+  }
+
+  // Nodes
+  for(let i=0;i<n;i++){
+    const nd=nodes[i], col=PLAT_COLORS[nd.platform]||'#888', r2=16;
+    ctx.beginPath(); ctx.arc(pos[i].x,pos[i].y,r2,0,2*Math.PI);
+    ctx.fillStyle=col+'28'; ctx.fill(); ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.stroke();
+    const lbl=nd.username.length>9?nd.username.slice(0,8)+'…':nd.username;
+    ctx.font='bold 10px Courier New'; ctx.fillStyle='#1a1a1a'; ctx.textAlign='center';
+    ctx.fillText(lbl,pos[i].x,pos[i].y+3);
+    ctx.font='8px Courier New'; ctx.fillStyle='#999';
+    ctx.fillText(nd.platform,pos[i].x,pos[i].y+r2+9);
+  }
+
+  // Click handler
+  canvas.onclick = (ev) => {
+    const rect=canvas.getBoundingClientRect();
+    const mx=(ev.clientX-rect.left), my=(ev.clientY-rect.top);
+    for(let i=0;i<n;i++){
+      if(Math.sqrt((mx-pos[i].x)**2+(my-pos[i].y)**2)<20){
+        document.getElementById('s-q').value=nodes[i].key;
+        nav('search'); doSearch(); break;
+      }
+    }
+  };
+}
+
+// ─── Train ────────────────────────────────────────────────────────────────────
+async function doTrain() {
+  const btn=document.getElementById('t-btn');
+  btn.disabled=true; btn.innerHTML='<span class="loading"></span>Starting...';
+  try {
+    const r = await api('POST', '/train', {
+      epochs: parseInt(document.getElementById('t-epochs').value)||50,
+      batch_size: parseInt(document.getElementById('t-batch').value)||256,
+      lr: parseFloat(document.getElementById('t-lr').value)||3e-4,
+      margin: parseFloat(document.getElementById('t-margin').value)||0.3,
+      patience: parseInt(document.getElementById('t-patience').value)||8,
+    });
+    lg('ok','Training started.','t-log');
+    trainPollId = setInterval(pollTraining, 2000);
+  } catch(e) {
+    lg('err', e.message, 't-log');
+    btn.disabled=false; btn.textContent='Start training';
+  }
+}
+
+async function pollTraining() {
+  try {
+    const r = await api('GET', '/train/status');
+    document.getElementById('ts-status').textContent = r.running?'Running':r.error?'Error':'Done';
+    document.getElementById('ts-f1').textContent = r.best_f1>0?r.best_f1.toFixed(3):'—';
+    document.getElementById('ts-epoch').textContent = r.total_epochs>0?`${r.epoch}/${r.total_epochs}`:'—';
+    document.getElementById('ts-model').textContent = r.model_loaded?'loaded':'not loaded';
+    if (r.total_epochs>0) document.getElementById('t-progress').style.width = `${Math.round(r.epoch/r.total_epochs*100)}%`;
+    // Append new log lines
+    const tlog=document.getElementById('t-log');
+    if(r.recent_log?.length) {
+      const last = tlog.lastChild?.textContent||'';
+      r.recent_log.forEach(line => {
+        if(!tlog.innerHTML.includes(line)) {
+          const d=document.createElement('div'); d.className='info'; d.textContent=line; tlog.appendChild(d);
+        }
+      });
+      tlog.scrollTop=tlog.scrollHeight;
+    }
+    if(r.finished) {
+      clearInterval(trainPollId);
+      const btn=document.getElementById('t-btn');
+      btn.disabled=false; btn.textContent='Start training';
+      if(r.error) lg('err',`Training failed: ${r.error}`,'t-log');
+      else { lg('ok','Training complete.','t-log'); await pollStatus(); }
+    }
+  } catch(e) {}
+}
+
+async function reloadModel() {
+  try {
+    const r = await api('POST', '/model/reload');
+    lg('ok', r.loaded?`Model loaded from disk (F1: ${r.metrics?.f1?.toFixed(3)||'?'})`:'No model found at data/models/best.pt', 't-log');
+    await pollStatus();
+  } catch(e) { lg('err', e.message, 't-log'); }
+}
+
+async function mineLinks() {
+  lg('info','Mining identity links from profiles...','t-log');
+  try {
+    const r = await api('POST', '/mine-links');
+    lg('ok', `Found ${r.total_found} new links (${r.total_links} total)`, 't-log');
+    await refreshAccounts();
+  } catch(e) { lg('err', e.message, 't-log'); }
+}
+
+// ─── Navigation ───────────────────────────────────────────────────────────────
+function nav(name) {
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>{
+    b.classList.toggle('active',
+      (name==='collect'&&b.textContent==='Collect')||
+      (name==='analyze'&&b.textContent==='Analyze pair')||
+      (name==='search'&&b.textContent==='Search')||
+      (name==='graph'&&b.textContent==='Network graph')||
+      (name==='train'&&b.textContent==='Train model')
+    );
+  });
+  if (name==='graph') setTimeout(loadGraph, 60);
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+pollStatus();
+setInterval(pollStatus, 15000);
+</script>
+</body>
+</html>

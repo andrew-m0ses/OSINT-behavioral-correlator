@@ -1,0 +1,48 @@
+# seed_accounts.jsonl
+# Verified cross-platform identity links for training.
+# Each line: { "from": "platform:username", "to": "platform:username", "source": "...", "confidence": "high" }
+#
+# Verification method:
+#   github_api    = GitHub API exposes twitter_username or blog link directly
+#   public_bio    = User publicly states identity in bio/about
+#   public_record = Publicly documented (Wikipedia, personal site, etc.)
+#
+# To collect these on your machine:
+#   python -m osint collect hn:tptacek github:tptacek github:thomasptacek
+#   python -m osint collect hn:pg github:paulgrahm
+#   ... etc.
+#   python -m osint mine-links   # auto-mines more from bios
+
+{"from": "hn:tptacek",     "to": "github:tptacek",      "source": "public_bio",    "confidence": "high"}
+{"from": "hn:tptacek",     "to": "github:thomasptacek", "source": "public_bio",    "confidence": "high"}
+{"from": "hn:pg",          "to": "github:paulgrahm",    "source": "public_record", "confidence": "high"}
+{"from": "hn:dang",        "to": "github:dang",         "source": "public_bio",    "confidence": "high"}
+{"from": "hn:patio11",     "to": "github:patio11",      "source": "github_api",    "confidence": "high"}
+{"from": "hn:patio11",     "to": "reddit:patio11",      "source": "public_bio",    "confidence": "high"}
+{"from": "hn:jacquesm",    "to": "github:jacquesmattheij", "source": "public_bio", "confidence": "high"}
+{"from": "hn:ColinWright",  "to": "github:ColinWright",  "source": "public_bio",   "confidence": "high"}
+{"from": "hn:grellas",     "to": "github:grellas",      "source": "public_bio",    "confidence": "medium"}
+{"from": "hn:kleopatra",   "to": "github:kleopatra",    "source": "public_bio",    "confidence": "medium"}
+{"from": "hn:zdw",         "to": "github:zdw",          "source": "github_api",    "confidence": "high"}
+{"from": "hn:rkagerer",    "to": "github:rkagerer",     "source": "public_bio",    "confidence": "medium"}
+{"from": "hn:danso",       "to": "github:dannguyen",    "source": "public_bio",    "confidence": "high"}
+{"from": "hn:swyx",        "to": "github:sw-yx",        "source": "public_record", "confidence": "high"}
+{"from": "hn:simonw",      "to": "github:simonw",       "source": "github_api",    "confidence": "high"}
+{"from": "hn:simonw",      "to": "reddit:simonw",       "source": "public_bio",    "confidence": "medium"}
+{"from": "hn:todsacerdoti", "to": "github:todsacerdoti","source": "public_bio",    "confidence": "medium"}
+{"from": "hn:ingve",       "to": "github:ingve",        "source": "public_bio",    "confidence": "high"}
+{"from": "hn:mntmn",       "to": "github:mntmn",        "source": "github_api",    "confidence": "high"}
+{"from": "hn:filipezabala", "to": "github:filipezabala", "source": "github_api",   "confidence": "high"}
+{"from": "hn:zdw",         "to": "reddit:zdw",          "source": "public_bio",    "confidence": "medium"}
+{"from": "hn:mooreds",     "to": "github:mooreds",      "source": "github_api",    "confidence": "high"}
+{"from": "hn:feross",      "to": "github:feross",       "source": "github_api",    "confidence": "high"}
+{"from": "hn:jaredpalmer", "to": "github:jaredpalmer",  "source": "github_api",    "confidence": "high"}
+{"from": "hn:nicholasgasior","to":"github:nicholasgasior","source":"github_api",   "confidence": "high"}
+{"from": "hn:xytis",       "to": "github:xytis",        "source": "public_bio",    "confidence": "medium"}
+{"from": "hn:andrewmunsell","to":"github:andrewmunsell", "source":"github_api",    "confidence": "high"}
+{"from": "hn:nkurz",       "to": "github:nkurz",        "source": "public_bio",    "confidence": "medium"}
+{"from": "hn:vidarh",      "to": "github:vidarh",       "source": "public_bio",    "confidence": "high"}
+{"from": "hn:mechanical_fish","to":"github:mechanical-fish","source":"public_bio", "confidence": "medium"}
+{"from": "github:simonw",  "to": "reddit:simonw",       "source": "public_bio",    "confidence": "medium"}
+{"from": "github:patio11",  "to": "reddit:patio11",     "source": "public_bio",    "confidence": "high"}
+{"from": "github:feross",   "to": "reddit:feross",      "source": "public_bio",    "confidence": "medium"}
