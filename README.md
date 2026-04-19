@@ -1,33 +1,31 @@
-# OSINT Behavioral Correlator
-
-Siamese neural network for cross-platform persona analysis: estimates whether two accounts on different platforms belong to the same person or not
+siamese neural network for cross-platform persona analysis: estimates whether two accounts on different platforms belong to the same person or not
 
 ---
 
-## how it works
+how it works
 
-1) **collect** — fetches post history from public APIs
-2) **fingerprint** — extracts a 486-dim behavioral vector per account:
+1) collect — fetches post history from public APIs
+2) fingerprint — extracts a 486-dim behavioral vector per account:
    - 31-dim temporal histogram (posting hours, weekday patterns)
    - 55-dim stylometric vector (sentence length, vocabulary richness, function word frequencies, punctuation habits)
    - 8-dim behavioral vector (burst score, weekend ratio, reply ratio, topic diversity)
    - 384-dim semantic embedding (mean-pooled `all-MiniLM-L6-v2`)
    - 8-dim learned platform embedding
-3) **score** — a trained Siamese network maps accounts to a unit sphere; cosine similarity between embeddings indicates identity match probability
-4) **explain** — per-feature breakdown shows which behavioral signals match or mismatch
+3) score — a trained Siamese network maps accounts to a unit sphere; cosine similarity between embeddings indicates identity match probability
+4) explain — per-feature breakdown shows which behavioral signals match or mismatch
 
-## model performance
+model performance
 
 trained on 164 verified cross-platform identity groups (HN ↔ GitHub):
 
-| Metric | Value |
+| metric | value |
 |--------|-------|
 | embedding gap (same vs. different person) | 0.49 |
 | F1 @ threshold 0.70 | 0.28 |
 
 ---
 
-## quickstart
+quickstart
 
 ```bash
 pip install -r requirements.txt
@@ -39,7 +37,7 @@ a pre-trained model checkpoint is included at `data/models/best.pt`.
 
 ---
 
-## CLI
+CLI
 
 ```bash
 # collect accounts
@@ -58,7 +56,7 @@ python -m osint train --epochs 150 --batch-size 64 --lr 0.0001 --patience 25
 
 ---
 
-## project structure
+project structure
 
 ```
 osint/
@@ -79,7 +77,7 @@ data/
 
 ---
 
-## environment variables
+environment variables
 
 ```bash
 export GITHUB_TOKEN=your_token        # raises GitHub rate limit 60 → 5000 req/hr
@@ -90,13 +88,13 @@ export TWITTER_CT0=your_token         # Twitter browser cookie
 
 ---
 
-## API
+API
 
 The FastAPI server exposes endpoints for collection, analysis, search, training, and graph visualization. Interactive docs at `http://localhost:8000/docs` when server is running.
 
-Key endpoints:
+key endpoints:
 
-| Method | Path | Description |
+| method | path | description |
 |--------|------|-------------|
 | POST | /api/collect | collect and fingerprint an account |
 | POST | /api/analyze | compare two accounts |
