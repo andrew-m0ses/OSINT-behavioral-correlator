@@ -4,15 +4,15 @@ siamese neural network for cross-platform persona analysis: estimates whether tw
 
 how it works
 
-1) collect — fetches post history from public APIs
-2) fingerprint — extracts a 486-dim behavioral vector per account:
+1) collect--fetches post history from public APIs
+2) fingerprint--extracts a 486-dim behavioral vector per account:
    - 31-dim temporal histogram (posting hours, weekday patterns)
    - 55-dim stylometric vector (sentence length, vocabulary richness, function word frequencies, punctuation habits)
    - 8-dim behavioral vector (burst score, weekend ratio, reply ratio, topic diversity)
    - 384-dim semantic embedding (mean-pooled `all-MiniLM-L6-v2`)
    - 8-dim learned platform embedding
-3) score — a trained Siamese network maps accounts to a unit sphere; cosine similarity between embeddings indicates identity match probability
-4) explain — per-feature breakdown shows which behavioral signals match or mismatch
+3) score--a trained Siamese network maps accounts to a unit sphere; cosine similarity between embeddings indicates identity match probability
+4) explain--per-feature breakdown shows which behavioral signals match or mismatch
 
 model performance
 
