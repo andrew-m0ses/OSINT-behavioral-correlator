@@ -14,6 +14,8 @@ how it works
 3) score--a trained Siamese network maps accounts to a unit sphere; cosine similarity between embeddings indicates identity match probability
 4) explain--per-feature breakdown shows which behavioral signals match or mismatch
 
+---
+
 model performance
 
 trained on 164 verified cross-platform identity groups (HN ↔ GitHub):
