@@ -1,4 +1,4 @@
-siamese neural network for cross-platform persona analysis: estimates whether two accounts on different platforms belong to the same person or not
+This tool uses a Siamese neural network for cross-platform persona analysis: in order to estimate the probability that two accounts on different platforms belong to the same person or not
 
 ---
 
